@@ -1248,10 +1248,22 @@
     // Input listeners
     window.addEventListener("keydown", (event) => {
       const key = event.key.toLowerCase();
-      if (key === "arrowup" || key === "w") INPUT.up = true;
-      if (key === "arrowdown" || key === "s") INPUT.down = true;
-      if (key === "arrowleft" || key === "a") INPUT.left = true;
-      if (key === "arrowright" || key === "d") INPUT.right = true;
+      if (key === "arrowup" || key === "w") {
+        INPUT.up = true;
+        INPUT.mouseAngle = null; // Clear mouse control when using keyboard
+      }
+      if (key === "arrowdown" || key === "s") {
+        INPUT.down = true;
+        INPUT.mouseAngle = null;
+      }
+      if (key === "arrowleft" || key === "a") {
+        INPUT.left = true;
+        INPUT.mouseAngle = null;
+      }
+      if (key === "arrowright" || key === "d") {
+        INPUT.right = true;
+        INPUT.mouseAngle = null;
+      }
     });
 
     window.addEventListener("keyup", (event) => {
@@ -1264,6 +1276,11 @@
 
     canvas.addEventListener("mousemove", (event) => {
       if (!playerSnake || !playerSnake.alive) return;
+      // Only use mouse control if no keyboard keys are pressed
+      if (INPUT.up || INPUT.down || INPUT.left || INPUT.right) {
+        INPUT.mouseAngle = null;
+        return;
+      }
       const rect = canvas.getBoundingClientRect();
       const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
       const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
