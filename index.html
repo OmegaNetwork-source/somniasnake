@@ -971,7 +971,7 @@
         if (!leaderboardEl.children.length) {
           const empty = document.createElement("div");
           empty.className = "score-empty";
-          empty.textContent = "No on-chain scores yet. Be the first!";
+          empty.textContent = "Global Quest Leaderboard Active";
           leaderboardEl.appendChild(empty);
         }
         return;
@@ -1083,31 +1083,8 @@
     }
 
     async function refreshChainLeaderboard() {
-      if (!isLeaderboardConfigured() || typeof ethers === "undefined") return;
-      if (!readContract) {
-        const provider = new ethers.providers.JsonRpcProvider(LEADERBOARD_CONFIG.rpcUrl);
-        readContract = new ethers.Contract(LEADERBOARD_CONFIG.address, LEADERBOARD_ABI, provider);
-      }
-      try {
-        const [players, scores] = await readContract.getTop(25);
-        chainLeaderboard = players
-          .map((player, idx) => {
-            if (!player || player === ethers.constants.AddressZero) return null;
-            const raw = scores[idx];
-            let value = 0;
-            try {
-              value = raw.toNumber();
-            } catch {
-              value = parseInt(raw.toString(), 10);
-            }
-            return { address: player, score: value };
-          })
-          .filter(Boolean)
-          .filter((entry) => entry.score > 0)
-          .sort((a, b) => b.score - a.score);
-      } catch (error) {
-        console.warn("Failed to load on-chain leaderboard:", error.message || error);
-      }
+      // On-chain leaderboard disabled in favor of unified Somnia Quest API
+      // We could fetch API leaderboard here in the future
       updateLeaderboard();
     }
 
