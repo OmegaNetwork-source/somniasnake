@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -295,6 +296,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="frame">
     <canvas id="arena"></canvas>
@@ -856,7 +858,7 @@
     }
 
     function prepareScoreSubmission(score) {
-      if (!LEADERBOARD_CONFIG || !isLeaderboardConfigured()) return;
+      // if (!LEADERBOARD_CONFIG || !isLeaderboardConfigured()) return; // Disabled check for API mode
       submitBtn.dataset.score = String(score);
       submitBtn.disabled = false;
       submitBtn.style.display = "inline-flex";
@@ -1109,12 +1111,10 @@
       updateLeaderboard();
     }
 
-    async function submitScoreOnChain() {
+    const API_URL = 'https://arcadebots.solarstudios.co';
+
+    async function submitScoreToAPI() {
       if (submittingScore) return;
-      if (!isLeaderboardConfigured()) {
-        setSubmitFeedback("Leaderboard contract not configured yet.", "error");
-        return;
-      }
       const score = Number(submitBtn.dataset.score || "0");
       if (!score) {
         setSubmitFeedback("No score to submit yet.", "error");
@@ -1123,25 +1123,35 @@
 
       submittingScore = true;
       submitBtn.disabled = true;
-      setSubmitFeedback("Preparing transaction…", "info");
+      setSubmitFeedback("Submitting score...", "info");
 
       try {
-        const contract = await ensureWriteContract();
-        setSubmitFeedback("Submitting score to Somnia…", "info");
-        const tx = await contract.submitScore(score);
-        setSubmitFeedback("Waiting for confirmation…", "info");
-        await tx.wait();
-        setSubmitFeedback("Score submitted!", "success");
-        submitBtn.style.display = "none";
-        await refreshChainLeaderboard();
+        if (!walletAddress) {
+          throw new Error("Wallet not connected");
+        }
+
+        const response = await fetch(`${API_URL}/api/submit-score`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            wallet: walletAddress.toLowerCase(),
+            game: 'snake_arena',
+            score: score,
+            highScore: score,
+            gamesPlayed: 1
+          })
+        });
+
+        if (response.ok) {
+          setSubmitFeedback("Score submitted!", "success");
+          submitBtn.style.display = "none";
+        } else {
+          throw new Error("API error");
+        }
       } catch (error) {
-        const message =
-          error?.data?.message ||
-          error?.error?.message ||
-          error?.message ||
-          "Failed to submit score.";
-        setSubmitFeedback(message.replace("execution reverted: ", ""), "error");
+        setSubmitFeedback("Failed to submit score.", "error");
         submitBtn.disabled = false;
+        console.error(error);
       } finally {
         submittingScore = false;
       }
@@ -1297,7 +1307,7 @@
       startGame();
     });
 
-    submitBtn.addEventListener("click", submitScoreOnChain);
+    submitBtn.addEventListener("click", submitScoreToAPI);
 
     // Touch control support
     canvas.addEventListener("touchmove", (event) => {
@@ -1330,6 +1340,5 @@
     requestAnimationFrame(gameLoop);
   </script>
 </body>
+
 </html>
-
-
