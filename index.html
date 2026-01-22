@@ -1104,7 +1104,18 @@
 
       try {
         if (!walletAddress) {
-          throw new Error("Wallet not connected");
+          if (typeof window.ethereum !== 'undefined') {
+            try {
+              const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+              handleAccountsChanged(accounts);
+              if (!walletAddress) throw new Error("Wallet not connected");
+            } catch (e) {
+              console.error(e);
+              throw new Error("Wallet connection failed");
+            }
+          } else {
+            throw new Error("No wallet found");
+          }
         }
 
         const response = await fetch(`${API_URL}/api/submit-score`, {
