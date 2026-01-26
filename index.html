@@ -1083,12 +1083,41 @@
     }
 
     async function refreshChainLeaderboard() {
-      // On-chain leaderboard disabled in favor of unified Somnia Quest API
-      // We could fetch API leaderboard here in the future
-      updateLeaderboard();
+      if (!isLeaderboardConfigured()) return;
+      
+      try {
+        if (!readContract) {
+          const provider = new ethers.providers.JsonRpcProvider(LEADERBOARD_CONFIG.rpcUrl);
+          readContract = new ethers.Contract(LEADERBOARD_CONFIG.address, LEADERBOARD_ABI, provider);
+        }
+        
+        const [addresses, scores] = await readContract.getTop(10);
+        chainLeaderboard = addresses.map((addr, idx) => ({
+          address: addr,
+          score: scores[idx].toNumber()
+        })).filter(e => e.score > 0);
+        
+        updateLeaderboard();
+      } catch (err) {
+        console.error("Failed to refresh leaderboard:", err);
+      }
     }
 
     const API_URL = 'https://arcadebots.solarstudios.co';
+
+    async function submitScoreToChain(score) {
+      try {
+        const contract = await ensureWriteContract();
+        setSubmitFeedback("Awaiting confirmation...", "info");
+        const tx = await contract.submitScore(score);
+        setSubmitFeedback("Transaction pending...", "info");
+        await tx.wait();
+        return true;
+      } catch (error) {
+        console.error("Blockchain submission error:", error);
+        throw error;
+      }
+    }
 
     async function submitScoreToAPI() {
       if (submittingScore) return;
@@ -1100,24 +1129,29 @@
 
       submittingScore = true;
       submitBtn.disabled = true;
-      setSubmitFeedback("Submitting score...", "info");
-
+      
       try {
         if (!walletAddress) {
           if (typeof window.ethereum !== 'undefined') {
-            try {
-              const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-              handleAccountsChanged(accounts);
-              if (!walletAddress) throw new Error("Wallet not connected");
-            } catch (e) {
-              console.error(e);
-              throw new Error("Wallet connection failed");
-            }
+            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            handleAccountsChanged(accounts);
+            if (!walletAddress) throw new Error("Wallet not connected");
           } else {
             throw new Error("No wallet found");
           }
         }
 
+        // 1. Submit to Blockchain first
+        setSubmitFeedback("Submitting to blockchain...", "info");
+        try {
+          await submitScoreToChain(score);
+        } catch (chainError) {
+          // Continue to API even if chain fails, but notify user
+          console.warn("Chain submission failed, trying API...");
+        }
+
+        // 2. Submit to API
+        setSubmitFeedback("Syncing with quest system...", "info");
         const response = await fetch(`${API_URL}/api/submit-score`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1131,13 +1165,14 @@
         });
 
         if (response.ok) {
-          setSubmitFeedback("Score submitted!", "success");
+          setSubmitFeedback("Score submitted to chain & API!", "success");
           submitBtn.style.display = "none";
+          setTimeout(refreshChainLeaderboard, 2000);
         } else {
           throw new Error("API error");
         }
       } catch (error) {
-        setSubmitFeedback("Failed to submit score.", "error");
+        setSubmitFeedback(error.message || "Failed to submit score.", "error");
         submitBtn.disabled = false;
         console.error(error);
       } finally {
